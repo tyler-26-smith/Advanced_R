@@ -81,40 +81,30 @@ x <- c(1, 2, 3)
 tracemem(x) #displays the location of the object it is tracking
 ```
 
-From then on, whenever that object is copied, `tracemem()` will print a message telling you which object was copied, its new address, and the sequence of calls that led to the copy:
+From then on, whenever that object is copied, `tracemem()` will print a message telling you which object was copied, its new address, and the sequence of calls that led to the copy.
 
-```{r trace2, dependson = "trace1", eval = FALSE}
-y <- x
-y[[3]] <- 4L
-x[[3]] <- 5L
-```
+If you modify `y` again, it won't get copied. That's because the new object now only has a single name bound to it, so R applies modify-in-place optimization.
 
-If you modify `y` again, it won't get copied. That's because the new object now only has a single name bound to it, so R applies modify-in-place optimisation. We'll come back to this in Section \@ref(modify-in-place).
-
-```{r trace3, dependson = "trace2"}
-y[[3]] <- 5L
-
-untracemem(x)
-```
+You can explore this functionality interactively by modifying the function below:
 
 ```{r}
 tracemem_example <- function(){
   x <- c(1, 2, 3)
-  tracemem(x)
+  cat(tracemem(x), "\n") #initial address (using cat() to show message)
   y <- x
   y[[3]] <- 4L #copy
-  x[[3]] <- 5L
-  y[[3]] <- 5L
+  x[[3]] <- 5L #no copy
+  y[[3]] <- 5L #no copy
+  untracemem(x) #untracemem() is the opposite of tracemem()
 }
 tracemem_example()
 ```
-
 
 `untracemem()` is the opposite of `tracemem()`; it turns tracing off.
 
 ### Function calls
 
-The same rules for copying also apply to function calls. Take this code:
+How would you diagram what happens within a function? Here's an example:
 
 ```{r}
 f <- function(a) {
@@ -132,53 +122,56 @@ untracemem(x)
 
 While `f()` is running, the `a` inside the function points to the same value as the `x` does outside the function:
 
-```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/binding-f1.png")
+![a and x point to same values](diagrams/name-value/binding-f1.png)
+
+The function `f()` is depicted by the yellow object on the right. It has a formal argument, `a`, which becomes a binding (indicated by dotted black line) in the execution environment (the gray box) when the function is run.
+
+Once `f()` completes, `x` and `z` will point to the same object. 
+
+![a and x point to same values](diagrams/name-value/binding-f2.png)
+
+The object never gets copied because it never gets modified. If `f()` did modify `x`, R would create a new copy, and then `z` would bind that object.
+
+```{r}
+f <- function(a) {
+  a[[1]] <- 2
+}
+
+x <- c(1, 2, 3)
+tracemem(x)
+
+z <- f(x)
+# x gets copied here
+
+untracemem(x)
 ```
 
-You'll learn more about the conventions used in this diagram in Section \@ref(execution-environments). In brief: the function `f()` is depicted by the yellow object on the right. It has a formal argument, `a`, which becomes a binding (indicated by dotted black line) in the execution environment (the gray box) when the function is run.
 
-Once `f()` completes, `x` and `z` will point to the same object. `0x74b` never gets copied because it never gets modified. If `f()` did modify `x`, R would create a new copy, and then `z` would bind that object.
+### Lists
 
-```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/binding-f2.png")
-```
+Recall that a list is a vector that can have elements of any type.
 
-### Lists {#list-references}
-\indexc{ref()}
-\index{lists}
-
-It's not just names (i.e. variables) that point to values; elements of lists do too. Consider this list, which is superficially very similar to the numeric vector above:
+To do this, the list’s name points to a vector of references, and these point to the objects (note how this is different than atomic vectors!)
 
 ```{r list1}
 l1 <- list(1, 2, 3)
 ```
 
-This list is more complex because instead of storing the values itself, it stores references to them:
+![lists point to values](diagrams/name-value/list.png)
 
-```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/list.png")
-```
-
-This is particularly important when we modify a list:
+Copy on modify for a list only copies the references, so is much more memory efficient. This is called a __shallow copy__.
 
 ```{r list2, dependson = "list1"}
 l2 <- l1
 ```
 
-```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/l-modify-1.png")
-```
+![list with two bindings](diagrams/name-value/l-modify-1.png)
 
 ```{r list3, dependson = "list2"}
 l2[[3]] <- 4
 ```
 
-```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/l-modify-2.png")
-```
-
-Like vectors, lists use copy-on-modify behaviour; the original list is left unchanged, and R creates a modified copy. This, however, is a __shallow__ copy: the list object and its bindings are copied, but the values pointed to by the bindings are not. The opposite of a shallow copy is a deep copy where the contents of every reference are copied. Prior to R 3.1.0, copies were always deep copies.
+![modified list](diagrams/name-value/l-modify-2.png)
 
 To see values that are shared across lists, use `lobstr::ref()`. `ref()` prints the memory address of each object, along with a local ID so that you can easily cross-reference shared components.
 
@@ -188,14 +181,13 @@ ref(l1, l2)
 
 ### Data frames {#df-modify}
 
-Data frames are lists of vectors, so copy-on-modify has important consequences when you modify a data frame. Take this data frame as an example:
+Data frames are lists of vectors, so copy-on-modify has important consequences when you modify a data frame. 
 
 ```{r}
 d1 <- data.frame(x = c(1, 5, 6), y = c(2, 4, 3))
 ```
-```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/dataframe.png")
-```
+
+![dataframe is list of vectors](diagrams/name-value/dataframe.png)
 
 If you modify a column, only _that_ column needs to be modified; the others will still point to their original references:
 
@@ -203,9 +195,8 @@ If you modify a column, only _that_ column needs to be modified; the others will
 d2 <- d1
 d2[, 2] <- d2[, 2] * 2
 ```
-```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/d-modify-c.png")
-```
+
+![modify column](diagrams/name-value/d-modify-c.png)
 
 However, if you modify a row, every column is modified, which means every column must be copied:
 
@@ -213,37 +204,21 @@ However, if you modify a row, every column is modified, which means every column
 d3 <- d1
 d3[1, ] <- d3[1, ] * 3
 ```
-```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/d-modify-r.png")
-```
+
+![modify row](diagrams/name-value/d-modify-r.png)
 
 ### Character vectors
-\index{string pool}
 
-The final place that R uses references is with character vectors[^character-vector]. I usually draw character vectors like this:
+R uses a __global string pool__ where each element of a character vector is a pointer to a unique string in the pool. This substantially decreases the amount of memory a character vector uses.
 
-[^character-vector]: Confusingly, a character vector is a vector of strings, not individual characters. 
-
-```{r}
-x <- c("a", "a", "abc", "d")
-```
-```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/character.png")
-```
-
-But this is a polite fiction. R actually uses a __global string pool__ where each element of a character vector is a pointer to a unique string in the pool:
-
-```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/character-2.png")
-```
+![character pool](diagrams/name-value/character-2.png)
 
 You can request that `ref()` show these references by setting the `character` argument to `TRUE`:
 
 ```{r}
+x <- c("a", "a", "abc", "d")
 ref(x, character = TRUE)
 ```
-
-This has a profound impact on the amount of memory a character vector uses but is otherwise generally unimportant, so elsewhere in the book I'll draw character vectors as if the strings lived inside a vector.
 
 ### Exercises
 
@@ -266,45 +241,27 @@ evalq(mean)
 match.fun("mean")
 ```
 
-1.  Why is `tracemem(1:10)` not useful?
+Why is `tracemem(1:10)` not useful?
 
-1.  Explain why `tracemem()` shows two copies when you run this code.
-    Hint: carefully look at the difference between this code and the code 
-    shown earlier in the section.
-     
-    ```{r, results = FALSE}
-    x <- c(1L, 2L, 3L)
-    tracemem(x)
+Sketch out the relationship between the following objects:
+
+```{r}
+a <- 1:10
+b <- list(a, a)
+c <- list(b, a, 1:10)
+```
+
+What happens when you run this code? Draw a picture.
+
+```{r}
+x <- list(1:10)
+x[[2]] <- x
+```
     
-    x[[3]] <- 4
-    ```
-
-1.  Sketch out the relationship between the following objects:
-
-    ```{r}
-    a <- 1:10
-    b <- list(a, a)
-    c <- list(b, a, 1:10)
-    ```
-
-1.  What happens when you run this code?
-
-    ```{r}
-    x <- list(1:10)
-    x[[2]] <- x
-    ```
     
-    Draw a picture.
-
 ## Object size
-\indexc{object.size} 
-\indexc{obj\_size()}
-\indexc{ALTREP}
-\index{memory usage}
 
-You can find out how much memory an object takes with `lobstr::obj_size()`[^object.size]:
-
-[^object.size]: Beware of the `utils::object.size()` function. It does not correctly account for shared references and will return sizes that are too large.
+You can find out how much memory an object takes with `lobstr::obj_size()`:
 
 ```{r}
 obj_size(letters)
@@ -319,15 +276,17 @@ obj_size(x)
 
 y <- list(x, x, x)
 obj_size(y)
+
+obj_size(y)-obj_size(x)
 ```
 
-`y` is only 80 bytes[^32bit] bigger than `x`. That's the size of an empty list with three elements:
+`y` is only 80 bytes bigger than `x`. That's the size of an empty list with three elements:
 
 ```{r}
 obj_size(list(NULL, NULL, NULL))
 ```
 
-[^32bit]: If you're running 32-bit R, you'll see slightly different sizes.
+If you're running 32-bit R, you'll see slightly different sizes.
 
 Similarly, because R uses a global string pool character vectors take up less memory than you might expect: repeating a string 100 times does not make it take up 100 times as much memory.
 
@@ -341,6 +300,7 @@ References also make it challenging to think about the size of individual object
 
 ```{r}
 obj_size(x, y)
+obj_size(x, y) == obj_size(y)
 ```
 
 Finally, R 3.5.0 and later versions have a feature that might lead to surprises: ALTREP, short for __alternative representation__. This allows R to represent certain types of vectors very compactly. The place you are most likely to see this is with `:` because instead of storing every single number in the sequence, R just stores the first and last number. This means that every sequence, no matter how large, is the same size:
@@ -354,44 +314,26 @@ obj_size(1:1e9)
 
 ### Exercises
 
-1.  In the following example, why are `object.size(y)` and `obj_size(y)`
-    so radically different? Consult the documentation of `object.size()`.
+Predict the output of the following code:
 
-    ```{r}
-    y <- rep(list(runif(1e4)), 100)
-    
-    object.size(y)
-    obj_size(y)
-    ```
+```{r, results = FALSE}
+a <- runif(1e6)
+obj_size(a)
 
-1.  Take the following list. Why is its size somewhat misleading?
+b <- list(a, a)
+obj_size(b)
+obj_size(a, b)
 
-    ```{r}
-    funs <- list(mean, sd, var)
-    obj_size(funs)
-    ```
+b[[1]][[1]] <- 10
+obj_size(b)
+obj_size(a, b)
 
-1.  Predict the output of the following code:
-
-    ```{r, results = FALSE}
-    a <- runif(1e6)
-    obj_size(a)
-    
-    b <- list(a, a)
-    obj_size(b)
-    obj_size(a, b)
-    
-    b[[1]][[1]] <- 10
-    obj_size(b)
-    obj_size(a, b)
-    
-    b[[2]][[1]] <- 10
-    obj_size(b)
-    obj_size(a, b)
-    ```
+b[[2]][[1]] <- 10
+obj_size(b)
+obj_size(a, b)
+```
 
 ## Modify-in-place
-\index{modify-in-place}
 
 As we've seen above, modifying an R object usually creates a copy. There are two exceptions:
 
@@ -455,26 +397,10 @@ This loop is surprisingly slow because each iteration of the loop copies the dat
 
 ```{r, eval = FALSE}
 cat(tracemem(x), "\n")
-#> <0x7f80c429e020> 
 
 for (i in 1:5) {
   x[[i]] <- x[[i]] - medians[[i]]
 }
-#> tracemem[0x7f80c429e020 -> 0x7f80c0c144d8]: 
-#> tracemem[0x7f80c0c144d8 -> 0x7f80c0c14540]: [[<-.data.frame [[<- 
-#> tracemem[0x7f80c0c14540 -> 0x7f80c0c145a8]: [[<-.data.frame [[<- 
-#> tracemem[0x7f80c0c145a8 -> 0x7f80c0c14610]: 
-#> tracemem[0x7f80c0c14610 -> 0x7f80c0c14678]: [[<-.data.frame [[<- 
-#> tracemem[0x7f80c0c14678 -> 0x7f80c0c146e0]: [[<-.data.frame [[<- 
-#> tracemem[0x7f80c0c146e0 -> 0x7f80c0c14748]: 
-#> tracemem[0x7f80c0c14748 -> 0x7f80c0c147b0]: [[<-.data.frame [[<- 
-#> tracemem[0x7f80c0c147b0 -> 0x7f80c0c14818]: [[<-.data.frame [[<- 
-#> tracemem[0x7f80c0c14818 -> 0x7f80c0c14880]: 
-#> tracemem[0x7f80c0c14880 -> 0x7f80c0c148e8]: [[<-.data.frame [[<- 
-#> tracemem[0x7f80c0c148e8 -> 0x7f80c0c14950]: [[<-.data.frame [[<- 
-#> tracemem[0x7f80c0c14950 -> 0x7f80c0c149b8]: 
-#> tracemem[0x7f80c0c149b8 -> 0x7f80c0c14a20]: [[<-.data.frame [[<- 
-#> tracemem[0x7f80c0c14a20 -> 0x7f80c0c14a88]: [[<-.data.frame [[<- 
 
 untracemem(x)
 ```
