@@ -5,32 +5,52 @@ date: "2023-08-10"
 output: html_document
 ---
 
-# Names and values
+# Memory
 
 This document is modified from Chapter 2 of [Advanced R](http://adv-r.had.co.nz/memory.html) by Hadley Wickham (second edition; licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
 
+## Warm-up exercise
+
+Working individually, brainstorm two ways to calculate the mean of each column of this example data frame. At least one of your ways should involve using a for loop.
+
+```{r test-matrix}
+set.seed(47)
+m <- data.frame(matrix(runif(1E5, max = 100), ncol = 100))
+```
+
+As a class, implement several options as functions. Make predictions as to which options will be fastest and why
+
+```{r}
+#f1 <- function(m) {}
+#f2 <- function(m) {}
+#f3 <- function(m) {}
+```
+
+Use the `microbenchmark` package to compare the speed of these options
+
+```{r}
+#library(microbenchmark)
+#compare <- microbenchmark(f1(m), 
+#                          f2(m), 
+#                          f3(m),
+#                          times = 100
+#                          )
+#
+#ggplot2::autoplot(compare)
+```
+
+Discussion questions:
+* What factors make these approaches more and less efficient? 
+* Do you expect the same patterns with larger datasets? Smaller datasets?
+* In your own work, have there been times where code efficiency was a concern? If so, what have you done to address this concern?
+
 ## Introduction
 
-In R, it is important to understand the distinction between an object and its name. Doing so will help you:
+Today we are going to take a step back and think about the distinction between an object and its name. Doing so will help you:
 
-* More accurately predict the performance and memory usage of your code. 
-* Write faster code by avoiding accidental copies, a major source of slow code. 
-* Better understand R's functional programming tools.
-
-The goal of this lesson is to help you understand the distinction between names and values, and when R will copy an object.
-
-
-### Objectives
-
-* Re-introduce R fundamentals
-* Understand the relationship between names and values in R
-* Apply this information to predict some unintuitive properties of R
-* Identify how internal data storage in R can lead to differences in code efficiency
-
-### Resources
-
-* http://adv-r.had.co.nz/memory.html 
-* https://bookdown.org/rdpeng/RProgDA/software-testing-framework-for-r-packages.html 
+* More accurately predict the performance and memory usage of your code
+* Write more efficient code
+* Better understand R's functional programming tools (revisited in the next few weeks)
 
 ### Prerequisites
 
@@ -43,12 +63,11 @@ library(lobstr)
 
 ## Binding basics
 
-Computer Memory is information (like numbers or strings) that is for immediate use. When you put information there, it is located at some “address” on your computer, and you can retrieve it from that address.
-
-The following puts the vector c(1, 2, 3) in memory, and binds the name x to it
+Computer memory is information (like numbers or strings) that is for immediate use. When you put information there, it is located at some “address” on your computer, and you can retrieve it from that address.
 
 ```{r}
-x <- c(1, 2, 3)
+x <- c(1, 2, 3) #Puts the vector c(1, 2, 3) in memory, and binds the name x to it. 
+lobstr::obj_addr(x) #See the address of this object
 ```
 
 We can visualize this with a diagram:
@@ -67,11 +86,11 @@ y <- x
 knitr::include_graphics("diagrams/name-value/binding-2.png")
 ```
 
-The function lobstr::obj_addr() let’s us see the address of this object. Note that it is the same for x and y
+We can confirm that the address is the same for x and y using `lobstr::obj_addr()`
 
 ```{r}
-lobstr::obj_addr(x)
-lobstr::obj_addr(y)
+identical(lobstr::obj_addr(x), 
+          lobstr::obj_addr(y))
 ```
 
 These identifiers change every time you restart R.
@@ -121,11 +140,56 @@ tracemem_example <- function(){
 tracemem_example()
 ```
 
-`untracemem()` is the opposite of `tracemem()`; it turns tracing off.
+For loops in R have a reputation for being slow. Often that slowness can happen because you’re modifying a copy instead of modifying in place. 
+
+For example, here is a function that tries to predict the outcome of coin flips based on past flips. Can you remove one line of code in this function to stop flip_results from being copied `n` times?
+
+```{r}
+coin_flip <- function(n) {
+  flip_results <- character(n) #create flip results vector
+  cat(tracemem(flip_results),'\n') #set up tracing
+  predictions <- character(n) #create predictions vector
+  coin <- c('heads', 'tails') #set up a "coin" 
+  for (i in 1:n){
+    #identify the number of heads and tails in previous flips
+    previous <- flip_results
+    n_heads <- sum(previous=="heads")
+    n_tails <- sum(previous=="tails")
+    #based on previous results, predict future coin flips
+    if(n_heads==n_tails){predictions[[i]] <- "unknown!"}
+    if(n_heads>n_tails){predictions[[i]] <- "heads"}
+    if(n_heads<n_tails){predictions[[i]] <- "tails"}
+    #flip the coin
+    flip_results[[i]] <- sample(coin, size = 1)
+  }
+  #return predictions and results
+  data.frame(predictions,flip_results)
+}
+
+results <- coin_flip(10)
+results
+```
+
+An important note that has driven me crazy trying to create this demo: `tracemem()` only reports times that an object with multiple bindings is modified, creating a new copy. It does not signal anything if the object is modified and re-bound to the same name. 
+
+For example, this function does not show a copy, despite being inefficient
+
+```{r}
+tracemem_example2 <- function(){
+  x <- c(1, 2, 3)
+  cat(tracemem(x), "\n")
+  y <- x
+  y <- y + 2
+  untracemem(x)
+}
+
+tracemem_example2()
+```
+
 
 ### Function calls
 
-How would you diagram what happens within a function? Here's an example:
+Here's a simple example of a function to illustrate how memory operates similarly inside and outside of functions:
 
 ```{r}
 f <- function(a) {
@@ -209,6 +273,14 @@ To see values that are shared across lists, use `lobstr::ref()`. `ref()` prints 
 ```{r}
 ref(l1, l2)
 ```
+
+Note that the location of the list itself is different (and therefore `tracemem()` will show a copy) unless the entire list is the same.
+
+```{r}
+l3 <- l1
+ref(l1, l2, l3)
+```
+
 
 ### Data frames {#df-modify}
 
@@ -356,18 +428,6 @@ obj_size(1:1e9)
 Something interesting occurs if we use object_size() to systematically explore the size of an integer vector. 
 
 ```{r}
-max <- 10
-sizes <- sapply(0:max, function(n) obj_size(seq_len(n)))
-plot(0:max, sizes, xlab = "Length", ylab = "Size (bytes)", 
-  type = "s")
-sizes[[1]]
-```
-
-While you might expect that memory usage would grow proportionately with length, the way R requests memory from the operating system is optimized for speed. 
-
-Having to request memory every time a small vector is created would slow R down considerably. Instead, R asks for a big block of memory and then manages that block itself. This block is called the small vector pool.
-
-```{r}
 test_range <- seq(0,10,by=1)
 sizes <- sapply(test_range, function(n) obj_size(seq_len(n)))
 plot(test_range, sizes, xlab = "Length", ylab = "Size (bytes)", 
@@ -375,6 +435,10 @@ plot(test_range, sizes, xlab = "Length", ylab = "Size (bytes)",
 
 sizes[[1]] #An empty vector occupies 48 bites
 ```
+
+While you might expect that memory usage would grow proportionately with length, the way R requests memory from the operating system is optimized for speed. 
+
+Having to request memory every time a small vector is created would slow R down considerably. Instead, R asks for a big block of memory and then manages that block itself. This block is called the small vector pool.
 
 ### Exercises
 
@@ -396,58 +460,6 @@ b[[2]][[1]] <- 10
 obj_size(b)
 obj_size(a, b)
 ```
-
-Let's explore the subtleties with a case study using for loops. For loops have a reputation for being slow in R, but often that slowness is caused by every iteration of the loop creating a copy. Consider the following code. It subtracts the median from each column of a large data frame: 
-
-```{r, cache = TRUE}
-x <- data.frame(matrix(runif(5 * 1e4), ncol = 5))
-medians <- vapply(x, median, numeric(1))
-
-for (i in seq_along(medians)) {
-  x[[i]] <- x[[i]] - medians[[i]]
-}
-```
-
-This loop is surprisingly slow because each iteration of the loop copies the data frame. You can see this by using `tracemem()`:
-
-```{r, eval = FALSE}
-medians <- vapply(x, median, numeric(1))
-
-for_loop_example <- function(){
-  cat(tracemem(x), "\n")
-
-  for (i in 1:5) {
-    x[[i]] <- x[[i]] - medians[[i]]
-  }
-  
-  untracemem(x)
-}
-
-for_loop_example()
-```
-
-In fact, each iteration copies the data frame not once, not twice, but three times! Two copies are made by `[[.data.frame`, and a further copy is made because `[[.data.frame` is a regular function that increments the reference count of `x`. 
-
-We can reduce the number of copies by using a list instead of a data frame. Modifying a list uses internal C code, so the references are not incremented and no copy is made:
-
-```{r, eval = FALSE}
-y <- as.list(x)
-cat(tracemem(y), "\n")
-#> <0x7f80c5c3de20>
-  
-for (i in 1:5) {
-  y[[i]] <- y[[i]] - medians[[i]]
-}
-```
-
-While it's not hard to determine when a copy is made, it is hard to prevent it. If you find yourself resorting to exotic tricks to avoid copies, it may be time to rewrite your function in C++
-
-
-### Exercises
-
-Wrap the two methods for subtracting medians into two functions, then
-use the 'bench' package [@bench] to carefully compare their speeds. How does
-performance change as the number of columns increase?
 
 ## Unbinding and the garbage collector {#gc}
 
@@ -475,30 +487,3 @@ The garbage collector (GC) frees up memory by deleting R objects that are no lon
 R uses a __tracing__ GC. This means it traces every object that's reachable from the global environment, and all objects that are, in turn, reachable from those objects (i.e. the references in lists and environments are searched recursively).
 
 The garbage collector (GC) runs automatically whenever R needs more memory to create a new object, and it is not necessary/useful to run `gc()` yourself.
-
-### Loops
-
-For loops in R have a reputation for being slow. Often that slowness is because you’re modifying a copy instead of modifying in place. Consider the following code. It subtracts the median from each column of a large data frame:
-
-```{r}
-x <- data.frame(matrix(runif(100 * 1e4), ncol = 100))
-medians <- vapply(x, median, numeric(1))
-
-for(i in seq_along(medians)) {
-  x[, i] <- x[, i] - medians[i]
-  print(c(obj_addr(x))) #Different each time
-}
-```
-
-If we do this as a list, the object doesn't have to be copied every time
-
-```{r}
-y <- as.list(x)
-for(i in seq_along(medians)) {
-  y[[i]] <- y[[i]] - medians[i]
-  print(c(obj_addr(y))) #The same each time
-}
-```
-
-
-
