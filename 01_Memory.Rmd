@@ -9,16 +9,16 @@ output: html_document
 
 This document is modified from Chapter 2 of [Advanced R](http://adv-r.had.co.nz/memory.html) by Hadley Wickham (second edition; licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
 
-## Warm-up exercise
+# Warm-up exercise
 
-Working individually, brainstorm two ways to calculate the mean of each column of this example data frame. At least one of your ways should involve using a for loop.
+Working individually, brainstorm two ways to calculate the mean of each column of every numeric column in this example data frame. 
 
 ```{r test-matrix}
 set.seed(47)
-m <- data.frame(matrix(runif(1E5, max = 100), ncol = 100))
+dt1  <- readr::read_csv("https://pasta.lternet.edu/package/data/eml/edi/199/11/509f39850b6f95628d10889d66885b76")
 ```
 
-As a class, implement several options as functions. Make predictions as to which options will be fastest and why
+As a class, implement several options as functions. Make predictions as to which options will be most memory intensive (note that this is different than being fastest!)
 
 ```{r}
 #f1 <- function(m) {}
@@ -26,23 +26,26 @@ As a class, implement several options as functions. Make predictions as to which
 #f3 <- function(m) {}
 ```
 
-Use the `microbenchmark` package to compare the speed of these options
+Use the `profmem` package to compare the memory use of these options
 
 ```{r}
-#library(microbenchmark)
-#compare <- microbenchmark(f1(m), 
-#                          f2(m), 
-#                          f3(m),
-#                          times = 100
-#                          )
-#
-#ggplot2::autoplot(compare)
+#library(profmem) #uses utils::Rprofmem
+#gc()
+#total(profmem(x <- f1(m)))
+#total(profmem(x <- f2(m)))
+#total(profmem(x <- f3(m)))
+
+#Function size
+
+#lobstr::obj_size(f1)
+#lobstr::obj_size(f2)
 ```
 
-Discussion questions:
-* What factors make these approaches more and less efficient? 
+## Discussion questions
+
+* What factors make these approaches use more or less memory? 
 * Do you expect the same patterns with larger datasets? Smaller datasets?
-* In your own work, have there been times where code efficiency was a concern? If so, what have you done to address this concern?
+* In your own work, have there been times where memory use was a concern? If so, what have you done to address this concern?
 
 ## Introduction
 
@@ -61,7 +64,7 @@ We'll use the [lobstr](https://github.com/r-lib/lobstr) package to dig into the 
 library(lobstr)
 ```
 
-## Binding basics
+## Binding basics: vectors
 
 Computer memory is information (like numbers or strings) that is for immediate use. When you put information there, it is located at some “address” on your computer, and you can retrieve it from that address.
 
@@ -140,37 +143,7 @@ tracemem_example <- function(){
 tracemem_example()
 ```
 
-For loops in R have a reputation for being slow. Often that slowness can happen because you’re modifying a copy instead of modifying in place. 
-
-For example, here is a function that tries to predict the outcome of coin flips based on past flips. Can you remove one line of code in this function to stop flip_results from being copied `n` times?
-
-```{r}
-coin_flip <- function(n) {
-  flip_results <- character(n) #create flip results vector
-  cat(tracemem(flip_results),'\n') #set up tracing
-  predictions <- character(n) #create predictions vector
-  coin <- c('heads', 'tails') #set up a "coin" 
-  for (i in 1:n){
-    #identify the number of heads and tails in previous flips
-    previous <- flip_results
-    n_heads <- sum(previous=="heads")
-    n_tails <- sum(previous=="tails")
-    #based on previous results, predict future coin flips
-    if(n_heads==n_tails){predictions[[i]] <- "unknown!"}
-    if(n_heads>n_tails){predictions[[i]] <- "heads"}
-    if(n_heads<n_tails){predictions[[i]] <- "tails"}
-    #flip the coin
-    flip_results[[i]] <- sample(coin, size = 1)
-  }
-  #return predictions and results
-  data.frame(predictions,flip_results)
-}
-
-results <- coin_flip(10)
-results
-```
-
-An important note that has driven me crazy trying to create this demo: `tracemem()` only reports times that an object with multiple bindings is modified, creating a new copy. It does not signal anything if the object is modified and re-bound to the same name. 
+A side note: `tracemem()` only reports times that an object with multiple bindings is __modified__, creating a new copy. It does not signal anything if a new object is created based on the old object (even if this is bound to the same name). 
 
 For example, this function does not show a copy, despite being inefficient
 
@@ -180,12 +153,45 @@ tracemem_example2 <- function(){
   cat(tracemem(x), "\n")
   y <- x
   y <- y + 2
+  #y[[1]] <- y[[1]] + 2 #this would make a copy, because this modifies y itself
   untracemem(x)
+  y
 }
 
 tracemem_example2()
 ```
 
+External functions can often involve making multiple copies. For example, consider this `tidyverse` example, which calculates the daily mean of water quality data.
+
+```{r}
+dt1  <- readr::read_csv("https://pasta.lternet.edu/package/data/eml/edi/199/11/509f39850b6f95628d10889d66885b76")
+tracemem(dt1)
+daily_means <- dt1 |>
+  dplyr::mutate(Date = as.Date(DateTime)) |> 
+  dplyr::group_by(Date) |> 
+  dplyr::summarise(across(.cols = where(is.numeric),.fns = mean))
+```
+
+Similarly, for loops in R have a reputation for being slow in R, and sometimes that slowness can happen because you’re modifying a copy instead of modifying in place. 
+
+One more note: there is a certain class of functions called __primitive functions__ in R that use internal C code and will not make copies. This includes most basic arithmetic and subsetting functions. They are listed [here](r-bloggers.com/2020/02/primitive-functions-list/).
+
+### Exercises
+
+1. Explain the relationship between `a`, `b`, `c` and `d` in the following code:
+
+```{r}
+a <- 1:10
+b <- a
+c <- b
+d <- 1:10
+```
+
+2. Draw a picture illustrating `a`, `b`, `c` and `d`
+
+3. Why is `tracemem(1:10)` not useful?
+
+## Binding basics: other data structures
 
 ### Function calls
 
@@ -333,16 +339,7 @@ ref(x, character = TRUE)
 
 ### Exercises
 
-Explain the relationship between `a`, `b`, `c` and `d` in the following code:
-
-```{r}
-a <- 1:10
-b <- a
-c <- b
-d <- 1:10
-```
-
-The following code accesses the mean function in multiple ways. Do they all point to the same underlying function object? Verify this with `lobstr::obj_addr()`.
+1. The following code accesses the mean function in multiple ways. Do they all point to the same underlying function object? Verify this with `lobstr::obj_addr()`.
     
 ```{r, eval = FALSE}
 mean
@@ -352,9 +349,7 @@ evalq(mean)
 match.fun("mean")
 ```
 
-Why is `tracemem(1:10)` not useful?
-
-Sketch out the relationship between the following objects:
+2. Sketch out the relationship between the following objects:
 
 ```{r}
 a <- 1:10
@@ -362,13 +357,12 @@ b <- list(a, a)
 c <- list(b, a, 1:10)
 ```
 
-What happens when you run this code? Draw a picture.
+3. What happens when you run this code? Draw a picture.
 
 ```{r}
 x <- list(1:10)
 x[[2]] <- x
 ```
-    
     
 ## Object size
 
@@ -442,7 +436,7 @@ Having to request memory every time a small vector is created would slow R down 
 
 ### Exercises
 
-Predict the output of the following code:
+1. Predict the output of the following code:
 
 ```{r, results = FALSE}
 a <- runif(1e6)
