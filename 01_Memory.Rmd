@@ -9,18 +9,18 @@ output: html_document
 
 This document is modified from Chapter 2 of [Advanced R](http://adv-r.had.co.nz/memory.html) by Hadley Wickham (second edition; licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
 
-# Warm-up exercise
+## Warm-up exercise
 
 Working individually, brainstorm two ways to calculate the mean of each column of every numeric column in this example data frame. 
 
-```{r test-matrix}
+```{r load data, message = FALSE}
 set.seed(47)
 dt1  <- readr::read_csv("https://pasta.lternet.edu/package/data/eml/edi/199/11/509f39850b6f95628d10889d66885b76")
 ```
 
 As a class, implement several options as functions. Make predictions as to which options will be most memory intensive (note that this is different than being fastest!)
 
-```{r}
+```{r warm up functions}
 #f1 <- function(m) {}
 #f2 <- function(m) {}
 #f3 <- function(m) {}
@@ -28,7 +28,7 @@ As a class, implement several options as functions. Make predictions as to which
 
 Use the `profmem` package to compare the memory use of these options
 
-```{r}
+```{r profmem}
 #library(profmem) #uses utils::Rprofmem
 #gc()
 #total(profmem(x <- f1(m)))
@@ -59,7 +59,7 @@ Today we are going to take a step back and think about the distinction between a
 
 We'll use the [lobstr](https://github.com/r-lib/lobstr) package to dig into the internal representation of R objects.
 
-```{r setup}
+```{r lobstr}
 #install.packages("lobstr")
 library(lobstr)
 ```
@@ -68,7 +68,7 @@ library(lobstr)
 
 Computer memory is information (like numbers or strings) that is for immediate use. When you put information there, it is located at some “address” on your computer, and you can retrieve it from that address.
 
-```{r}
+```{r address}
 x <- c(1, 2, 3) #Puts the vector c(1, 2, 3) in memory, and binds the name x to it. 
 lobstr::obj_addr(x) #See the address of this object
 ```
@@ -81,7 +81,7 @@ knitr::include_graphics("diagrams/name-value/binding-1.png")
 
 Thus, you can think of a name as a reference to a value. For example, if you run this code, you don't get another copy of the value `c(1, 2, 3)`, you get another binding to the existing object:
 
-```{r}
+```{r y}
 y <- x
 ```
 
@@ -91,7 +91,7 @@ knitr::include_graphics("diagrams/name-value/binding-2.png")
 
 We can confirm that the address is the same for x and y using `lobstr::obj_addr()`
 
-```{r}
+```{r address2}
 identical(lobstr::obj_addr(x), 
           lobstr::obj_addr(y))
 ```
@@ -102,7 +102,7 @@ These identifiers change every time you restart R.
 
 If you modify y, then it will make a copy of this object and point y to that new object. This is called __copy-on-modify__
 
-```{r}
+```{r copy on modify}
 y[[3]] <- 4
 lobstr::obj_addr(x) #x has the same address (x does not change when you change y -- this is good!)
 lobstr::obj_addr(y) #y has a new address
@@ -118,7 +118,7 @@ You can use `base::tracemem()` to track whenever an object is copied. Once you c
 
 When using `tracemem()` interactively, you'll get different results inside of RStudio. The environment pane must make a reference to each object in order to display information about it. This distorts your interactive exploration but doesn't affect code inside of functions, and so doesn't affect performance during data analysis. 
 
-```{r trace1, eval = FALSE}
+```{r trace1}
 x <- c(1, 2, 3)
 tracemem(x) #displays the location of the object it is tracking
 ```
@@ -129,7 +129,7 @@ If you modify `x` again, it won't get copied. That's because the new object now 
 
 You can explore this functionality interactively by modifying the function below:
 
-```{r}
+```{r trace2}
 tracemem_example <- function(){
   x <- c(1, 2, 3)
   cat(tracemem(x), "\n") #initial address (using cat() to show message)
@@ -147,7 +147,7 @@ A side note: `tracemem()` only reports times that an object with multiple bindin
 
 For example, this function does not show a copy, despite being inefficient
 
-```{r}
+```{r trace3}
 tracemem_example2 <- function(){
   x <- c(1, 2, 3)
   cat(tracemem(x), "\n")
@@ -163,7 +163,7 @@ tracemem_example2()
 
 External functions can often involve making multiple copies. For example, consider this `tidyverse` example, which calculates the daily mean of water quality data.
 
-```{r}
+```{r tidyverse, message = FALSE}
 dt1  <- readr::read_csv("https://pasta.lternet.edu/package/data/eml/edi/199/11/509f39850b6f95628d10889d66885b76")
 tracemem(dt1)
 daily_means <- dt1 |>
@@ -180,7 +180,7 @@ One more note: there is a certain class of functions called __primitive function
 
 1. Explain the relationship between `a`, `b`, `c` and `d` in the following code:
 
-```{r}
+```{r exercise 1.1}
 a <- 1:10
 b <- a
 c <- b
@@ -197,7 +197,7 @@ d <- 1:10
 
 Here's a simple example of a function to illustrate how memory operates similarly inside and outside of functions:
 
-```{r}
+```{r functions}
 f <- function(a) {
   a
 }
@@ -227,7 +227,7 @@ knitr::include_graphics("diagrams/name-value/binding-f2.png")
 
 The object never gets copied because it never gets modified. If `f()` did modify `x`, R would create a new copy, and then `z` would bind that object.
 
-```{r}
+```{r functions2}
 f <- function(a) {
   a[[1]] <- 2
 }
@@ -248,7 +248,7 @@ Recall that a list is a vector that can have elements of any type.
 
 To do this, the list’s name points to a vector of references, and these point to the objects (note how this is different than atomic vectors!)
 
-```{r}
+```{r lists}
 l1 <- list(1, 2, 3)
 ```
 
@@ -258,7 +258,7 @@ knitr::include_graphics("diagrams/name-value/list.png")
 
 Copy on modify for a list only copies the references, so is much more memory efficient. This is called a __shallow copy__.
 
-```{r}
+```{r lists2}
 l2 <- l1
 ```
 
@@ -266,7 +266,7 @@ l2 <- l1
 knitr::include_graphics("diagrams/name-value/l-modify-1.png")
 ```
 
-```{r}
+```{r lists3}
 l2[[3]] <- 4
 ```
 
@@ -276,13 +276,13 @@ knitr::include_graphics("diagrams/name-value/l-modify-2.png")
 
 To see values that are shared across lists, use `lobstr::ref()`. `ref()` prints the memory address of each object, along with a local ID so that you can easily cross-reference shared components.
 
-```{r}
+```{r ref}
 ref(l1, l2)
 ```
 
 Note that the location of the list itself is different (and therefore `tracemem()` will show a copy) unless the entire list is the same.
 
-```{r}
+```{r ref2}
 l3 <- l1
 ref(l1, l2, l3)
 ```
@@ -292,7 +292,7 @@ ref(l1, l2, l3)
 
 Data frames are lists of vectors, so copy-on-modify has important consequences when you modify a data frame. 
 
-```{r}
+```{r df}
 d1 <- data.frame(x = c(1, 5, 6), y = c(2, 4, 3))
 ```
 
@@ -302,7 +302,7 @@ knitr::include_graphics("diagrams/name-value/dataframe.png")
 
 If you modify a column, only _that_ column needs to be modified; the others will still point to their original references:
 
-```{r}
+```{r df2}
 d2 <- d1
 d2[, 2] <- d2[, 2] * 2
 ```
@@ -313,7 +313,7 @@ knitr::include_graphics("diagrams/name-value/d-modify-c.png")
 
 However, if you modify a row, every column is modified, which means every column must be copied:
 
-```{r}
+```{r df3}
 d3 <- d1
 d3[1, ] <- d3[1, ] * 3
 ```
@@ -332,7 +332,7 @@ knitr::include_graphics("diagrams/name-value/character-2.png")
 
 You can request that `ref()` show these references by setting the `character` argument to `TRUE`:
 
-```{r}
+```{r char}
 x <- c("a", "a", "abc", "d")
 ref(x, character = TRUE)
 ```
@@ -341,7 +341,7 @@ ref(x, character = TRUE)
 
 1. The following code accesses the mean function in multiple ways. Do they all point to the same underlying function object? Verify this with `lobstr::obj_addr()`.
     
-```{r, eval = FALSE}
+```{r exercise 2.1, eval = FALSE}
 mean
 base::mean
 get("mean")
@@ -351,7 +351,7 @@ match.fun("mean")
 
 2. Sketch out the relationship between the following objects:
 
-```{r}
+```{r exercise 2.2}
 a <- 1:10
 b <- list(a, a)
 c <- list(b, a, 1:10)
@@ -359,7 +359,7 @@ c <- list(b, a, 1:10)
 
 3. What happens when you run this code? Draw a picture.
 
-```{r}
+```{r exercise 2.3}
 x <- list(1:10)
 x[[2]] <- x
 ```
@@ -368,14 +368,14 @@ x[[2]] <- x
 
 You can find out how much memory an object takes with `lobstr::obj_size()`:
 
-```{r}
+```{r size}
 obj_size(letters)
 obj_size(ggplot2::diamonds)
 ```
 
 Since the elements of lists are references to values, the size of a list might be much smaller than you expect:
 
-```{r}
+```{r size2}
 x <- runif(1e6)
 obj_size(x)
 
@@ -387,7 +387,7 @@ obj_size(y)-obj_size(x)
 
 `y` is only 80 bytes bigger than `x`. That's the size of an empty list with three elements:
 
-```{r}
+```{r size3}
 obj_size(list(NULL, NULL, NULL))
 ```
 
@@ -395,7 +395,7 @@ If you're running 32-bit R, you'll see slightly different sizes.
 
 Similarly, because R uses a global string pool character vectors take up less memory than you might expect: repeating a string 100 times does not make it take up 100 times as much memory.
 
-```{r}
+```{r size4}
 banana <- "bananas bananas bananas"
 obj_size(banana)
 obj_size(rep(banana, 100))
@@ -403,7 +403,7 @@ obj_size(rep(banana, 100))
 
 References also make it challenging to think about the size of individual objects. `obj_size(x) + obj_size(y)` will only equal `obj_size(x, y)` if there are no shared values. Here, the combined size of `x` and `y` is the same as the size of `y`:
 
-```{r}
+```{r size5}
 obj_size(x, y)
 obj_size(x, y) == obj_size(y)
 ```
@@ -412,7 +412,7 @@ Finally, R 3.5.0 and later versions have a feature that might lead to surprises:
 
 The place you are most likely to see this is with `:` because instead of storing every single number in the sequence, R just stores the first and last number. This means that every sequence, no matter how large, is the same size:
 
-```{r}
+```{r size6}
 obj_size(1:3)
 obj_size(1:1e3)
 obj_size(1:1e6)
@@ -421,7 +421,7 @@ obj_size(1:1e9)
 
 Something interesting occurs if we use object_size() to systematically explore the size of an integer vector. 
 
-```{r}
+```{r size7}
 test_range <- seq(0,10,by=1)
 sizes <- sapply(test_range, function(n) obj_size(seq_len(n)))
 plot(test_range, sizes, xlab = "Length", ylab = "Size (bytes)", 
@@ -438,7 +438,7 @@ Having to request memory every time a small vector is created would slow R down 
 
 1. Predict the output of the following code:
 
-```{r, results = FALSE}
+```{r exercise 3.1, results = FALSE}
 a <- runif(1e6)
 obj_size(a)
 
@@ -459,7 +459,7 @@ obj_size(a, b)
 
 Consider this code:
 
-```{r}
+```{r unbind}
 x <- 1:3
 x <- 2:4
 ```
@@ -468,7 +468,7 @@ x <- 2:4
 knitr::include_graphics("diagrams/name-value/unbinding-2.png")
 ```
 
-```{r}
+```{r rm}
 rm(x)
 ```
 
@@ -481,3 +481,9 @@ The garbage collector (GC) frees up memory by deleting R objects that are no lon
 R uses a __tracing__ GC. This means it traces every object that's reachable from the global environment, and all objects that are, in turn, reachable from those objects (i.e. the references in lists and environments are searched recursively).
 
 The garbage collector (GC) runs automatically whenever R needs more memory to create a new object, and it is not necessary/useful to run `gc()` yourself.
+
+## Useful functions
+* `tracemem()`: Tracks an object so that a message is printed whenever it is copied
+* `lobstr::ref()`: Display a tree of object addresses
+* `lobstr::obj_addr()`: Gives the address (in memory) of an object that a name points to
+* `lobstr::obj_size()`: Gives the size (in memory) of an object
