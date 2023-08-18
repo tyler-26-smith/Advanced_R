@@ -120,7 +120,7 @@ When using `tracemem()` interactively, you'll get different results inside of RS
 
 ```{r trace1}
 x <- c(1, 2, 3)
-tracemem(x) #displays the location of the object it is tracking
+tracemem(x) #Displays the location of the object it is tracking
 ```
 
 From then on, whenever that object is copied, `tracemem()` will print a message telling you which object was copied, its new address, and the sequence of calls that led to the copy.
