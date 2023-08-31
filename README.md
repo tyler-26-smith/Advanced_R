@@ -13,7 +13,7 @@ By the end of this course, students will be able to:
 * Explore and understand other advanced R topics as desired based on student interest 
 
 ## Texts
-This class will be based around the Advanced R textbook, written by Hadley Wickham, which is a great resource for diving in depth into some advanced concepts in R. The book is freely available online [here](https://adv-r.hadley.nz/index.html) (with solutions available [here](https://bookdown.org/Tazinho/Advanced-R-Solutions/)). You are welcome to purchase and use a physical copy (second edition) if you would like, but it is not required for the course. Throughout the semester, we will likely also draw from other resources, depending on student interest. 
+This class is based around the Advanced R textbook, written by Hadley Wickham, which is a great resource for diving in depth into some advanced concepts in R. The book is freely available online [here](https://adv-r.hadley.nz/index.html) (with solutions available [here](https://bookdown.org/Tazinho/Advanced-R-Solutions/)). Throughout the semester, we will likely also draw from other resources, depending on student interest. 
 
 Other useful resources related to the material in this course:
 * [Course on R debugging and robust programming](https://github.com/lgatto/2016-02-25-adv-programming-EMBL) by Laurent Gatto & Robert Stojnic
