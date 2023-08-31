@@ -7,11 +7,14 @@ output: html_document
 
 # Warm-up exercise
 
-Working individually, brainstorm two ways to calculate the mean of each column of this example data frame. At least one of your ways should involve using a for loop.
+Working individually, brainstorm two ways to calculate the mean of each column of this example data frame. Try to use a for loop for at least one of your options.
 
 ```{r test-matrix}
 set.seed(47)
 m <- data.frame(matrix(runif(1E5, max = 100), ncol = 100))
+
+
+
 ```
 
 As a class, implement several options as functions. Make predictions as to which options will be fastest and why
@@ -22,17 +25,26 @@ As a class, implement several options as functions. Make predictions as to which
 #f3 <- function(m) {}
 ```
 
+Check if outputs are the same with all approaches
+
+```{r}
+identical(f1(m),
+          f2(m),
+          f3(m))
+```
+
+
 Use the `microbenchmark` package to compare the speed of these options
 
 ```{r}
-#library(microbenchmark)
-#compare <- microbenchmark(f1(m), 
-#                          f2(m), 
-#                          f3(m),
-#                          times = 100
-#                          )
-#
-#ggplot2::autoplot(compare)
+library(microbenchmark)
+compare <- microbenchmark(f1(m), 
+                          f2(m), 
+                          f3(m),
+                          times = 100
+                          )
+
+ggplot2::autoplot(compare)
 ```
 
 ## Discussion questions
@@ -40,3 +52,4 @@ Use the `microbenchmark` package to compare the speed of these options
 * What factors make these approaches more and less efficient? 
 * Do you expect the same patterns with larger datasets? Smaller datasets?
 * In your own work, have there been times where code efficiency was a concern? If so, what have you done to address this concern?
+* Aside from efficiency, what factors may make some of these options better than others?
