@@ -42,7 +42,7 @@ loop_replace <- function(m) {
 # OPTION 2: built-in colMeans function
 built_in <- function(m) {
   means <- colMeans(m) #built in function in R
-  unname(means)
+  unname(means) #this removes the names element of the vector, making the output identical to other options
 }
 
 # OPTION 3: for loop that sequentially adds
