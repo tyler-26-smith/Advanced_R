@@ -16,36 +16,89 @@ Working individually, brainstorm two ways to calculate the mean of each column o
 ```{r load data, message = FALSE}
 set.seed(47)
 dt1  <- readr::read_csv("https://pasta.lternet.edu/package/data/eml/edi/199/11/509f39850b6f95628d10889d66885b76")
+
+# View structure of data frame
+str(dt1)
+
+# Space to work!
+
+
+
+
+
+
+
+
+
+# Example for loop structure (you will need to modify this code before it will work)
+#numeric_columns <- c("Site","Depth_m", "SRP_ugL", "Rep", "TN_ugL", "TP_ugL", 
+#                     "NH4_ugL", "NO3NO2_ugL", "SRP_ugL", "DOC_mgL", "DIC_mgL", 
+#                     "DC_mgL", "DN_mgL", "Flag_DateTime", "Flag_TN_ugL", 
+#                     "Flag_TP_ugL", "Flag_NH4_ugL", "Flag_NO3NO2_ugL", 
+#                     "Flag_SRP_ugL", "Flag_DOC_mgL", "Flag_DIC_mgL", 
+#                     "Flag_DC_mgL", "Flag_DN_mgL")
+
+#output <- ??? #how long do you want the output to be? Can you create a vector of that length?
+#for (i in 1:length(numeric_columns)) { #loop through all of the columns specified above
+  
+  #Step 1: calculate the mean of that column
+  #recall that you can extract the data from a column by name using dt1[[column_name]]
+
+  #Step 2: save that mean in the output vector you created above
+#} end for loop
+#output #view output
 ```
 
 As a class, implement several options as functions. Make predictions as to which options will be most memory intensive (note that this is different than being fastest!)
 
 ```{r warm up functions}
-#f1 <- function(m) {}
-#f2 <- function(m) {}
-#f3 <- function(m) {}
+#f1 <- function(dt1) {}
+#f2 <- function(dt1) {}
+#f3 <- function(dt1) {}
+```
+
+What is the total size of each function?
+
+```{r}
+#Function size
+lobstr::obj_size(f1)
+lobstr::obj_size(f2)
+lobstr::obj_size(f3)
 ```
 
 Use the `profmem` package to compare the memory use of these options
 
 ```{r profmem}
-#library(profmem) #uses utils::Rprofmem
-#gc()
-#total(profmem(x <- f1(m)))
-#total(profmem(x <- f2(m)))
-#total(profmem(x <- f3(m)))
-
-#Function size
-
-#lobstr::obj_size(f1)
-#lobstr::obj_size(f2)
+#install.packages("profmem")
+library(profmem) #uses utils::Rprofmem
+gc()
+total(profmem(x <- f1(dt1)))
+total(profmem(x <- f2(dt1)))
+total(profmem(x <- f3(dt1)))
 ```
+
+Profile the speed of all options as we did in class last week
+
+```{r}
+#install.packages("microbenchmark")
+library(microbenchmark)
+compare <- microbenchmark(f1(m), 
+                          f2(m), 
+                          f3(m),
+                          times = 100
+                          )
+
+ggplot2::autoplot(compare)
+```
+
 
 ## Discussion questions
 
 * What factors make these approaches use more or less memory? 
 * Do you expect the same patterns with larger datasets? Smaller datasets?
 * In your own work, have there been times where memory use was a concern? If so, what have you done to address this concern?
+* Aside from efficiency and memory use, what factors may make some of these options better than others?
+
 
 ## Introduction
 
@@ -76,7 +129,7 @@ lobstr::obj_addr(x) #See the address of this object
 We can visualize this with a diagram:
 
 ```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/binding-1.png")
+knitr::include_graphics("../diagrams/name-value/binding-1.png")
 ```
 
 Thus, you can think of a name as a reference to a value. For example, if you run this code, you don't get another copy of the value `c(1, 2, 3)`, you get another binding to the existing object:
@@ -86,14 +139,16 @@ y <- x
 ```
 
 ```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/binding-2.png")
+knitr::include_graphics("../diagrams/name-value/binding-2.png")
 ```
 
 We can confirm that the address is the same for x and y using `lobstr::obj_addr()`
 
 ```{r address2}
-identical(lobstr::obj_addr(x), 
-          lobstr::obj_addr(y))
+lobstr::obj_addr(x)
+lobstr::obj_addr(y)
+
+identical(lobstr::obj_addr(x), lobstr::obj_addr(y))
 ```
 
 These identifiers change every time you restart R.
@@ -106,10 +161,12 @@ If you modify y, then it will make a copy of this object and point y to that new
 y[[3]] <- 4
 lobstr::obj_addr(x) #x has the same address (x does not change when you change y -- this is good!)
 lobstr::obj_addr(y) #y has a new address
+
+identical(lobstr::obj_addr(x), lobstr::obj_addr(y))
 ```
 
 ```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/binding-3.png")
+knitr::include_graphics("../diagrams/name-value/binding-3.png")
 ```
 
 ### `tracemem()`
@@ -169,7 +226,7 @@ tracemem(dt1)
 daily_means <- dt1 |>
   dplyr::mutate(Date = as.Date(DateTime)) |> 
   dplyr::group_by(Date) |> 
-  dplyr::summarise(across(.cols = where(is.numeric),.fns = mean))
+  dplyr::summarise(across(.cols = where(is.numeric), .fns = mean))
 ```
 
 Similarly, for loops in R have a reputation for being slow in R, and sometimes that slowness can happen because you’re modifying a copy instead of modifying in place. 
@@ -193,58 +250,9 @@ d <- 1:10
 
 ## Binding basics: other data structures
 
-### Function calls
-
-Here's a simple example of a function to illustrate how memory operates similarly inside and outside of functions:
-
-```{r functions}
-f <- function(a) {
-  a
-}
-
-x <- c(1, 2, 3)
-cat(tracemem(x), "\n")
-
-z <- f(x)
-# there's no copy here!
-
-untracemem(x)
-```
-
-While `f()` is running, the `a` inside the function points to the same value as the `x` does outside the function:
-
-```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/binding-f1.png")
-```
-
-The function `f()` is depicted by the yellow object on the right. It has a formal argument, `a`, which becomes a binding (indicated by dotted black line) in the execution environment (the gray box) when the function is run.
-
-Once `f()` completes, `x` and `z` will point to the same object. 
-
-```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/binding-f2.png")
-```
-
-The object never gets copied because it never gets modified. If `f()` did modify `x`, R would create a new copy, and then `z` would bind that object.
-
-```{r functions2}
-f <- function(a) {
-  a[[1]] <- 2
-}
-
-x <- c(1, 2, 3)
-tracemem(x)
-
-z <- f(x)
-# x gets copied here
-
-untracemem(x)
-```
-
-
 ### Lists
 
-Recall that a list is a vector that can have elements of any type.
+A list is a vector that can have elements of any type.
 
 To do this, the list’s name points to a vector of references, and these point to the objects (note how this is different than atomic vectors!)
 
@@ -253,7 +261,7 @@ l1 <- list(1, 2, 3)
 ```
 
 ```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/list.png")
+knitr::include_graphics("../diagrams/name-value/list.png")
 ```
 
 Copy on modify for a list only copies the references, so is much more memory efficient. This is called a __shallow copy__.
@@ -263,7 +271,7 @@ l2 <- l1
 ```
 
 ```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/l-modify-1.png")
+knitr::include_graphics("../diagrams/name-value/l-modify-1.png")
 ```
 
 ```{r lists3}
@@ -271,7 +279,7 @@ l2[[3]] <- 4
 ```
 
 ```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/l-modify-2.png")
+knitr::include_graphics("../diagrams/name-value/l-modify-2.png")
 ```
 
 To see values that are shared across lists, use `lobstr::ref()`. `ref()` prints the memory address of each object, along with a local ID so that you can easily cross-reference shared components.
@@ -287,8 +295,7 @@ l3 <- l1
 ref(l1, l2, l3)
 ```
 
-
-### Data frames {#df-modify}
+### Data frames
 
 Data frames are lists of vectors, so copy-on-modify has important consequences when you modify a data frame. 
 
@@ -297,7 +304,7 @@ d1 <- data.frame(x = c(1, 5, 6), y = c(2, 4, 3))
 ```
 
 ```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/dataframe.png")
+knitr::include_graphics("../diagrams/name-value/dataframe.png")
 ```
 
 If you modify a column, only _that_ column needs to be modified; the others will still point to their original references:
@@ -308,7 +315,7 @@ d2[, 2] <- d2[, 2] * 2
 ```
 
 ```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/d-modify-c.png")
+knitr::include_graphics("../diagrams/name-value/d-modify-c.png")
 ```
 
 However, if you modify a row, every column is modified, which means every column must be copied:
@@ -319,7 +326,7 @@ d3[1, ] <- d3[1, ] * 3
 ```
 
 ```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/d-modify-r.png")
+knitr::include_graphics("../diagrams/name-value/d-modify-r.png")
 ```
 
 ### Character vectors
@@ -327,7 +334,7 @@ knitr::include_graphics("diagrams/name-value/d-modify-r.png")
 R uses a __global string pool__ where each element of a character vector is a pointer to a unique string in the pool. This substantially decreases the amount of memory a character vector uses.
 
 ```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/character-2.png")
+knitr::include_graphics("../diagrams/name-value/character-2.png")
 ```
 
 You can request that `ref()` show these references by setting the `character` argument to `TRUE`:
@@ -455,7 +462,7 @@ obj_size(b)
 obj_size(a, b)
 ```
 
-## Unbinding and the garbage collector {#gc}
+## Unbinding and the garbage collector
 
 Consider this code:
 
@@ -465,7 +472,7 @@ x <- 2:4
 ```
 
 ```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/unbinding-2.png")
+knitr::include_graphics("../diagrams/name-value/unbinding-2.png")
 ```
 
 ```{r rm}
@@ -473,7 +480,7 @@ rm(x)
 ```
 
 ```{r, echo = FALSE, out.width = NULL}
-knitr::include_graphics("diagrams/name-value/unbinding-3.png")
+knitr::include_graphics("../diagrams/name-value/unbinding-3.png")
 ```
 
 The garbage collector (GC) frees up memory by deleting R objects that are no longer used, and by requesting more memory from the operating system if needed. 
